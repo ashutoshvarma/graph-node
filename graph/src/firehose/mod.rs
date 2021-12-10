@@ -1,8 +1,5 @@
-#[path = "dfuse.bstream.v1.rs"]
-mod pbbstream;
+mod codec;
+mod endpoints;
 
-pub mod endpoints;
-
-pub mod bstream {
-    pub use super::pbbstream::*;
-}
+pub use codec::*;
+pub use endpoints::*;

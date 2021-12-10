@@ -3,12 +3,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::firehose::endpoints::FirehoseEndpoint;
 use crate::prelude::*;
 
 use super::block_stream::{BlockStream, BlockStreamEvent, FirehoseMapper};
 use super::Blockchain;
-use crate::firehose::bstream;
+use crate::{firehose, firehose::FirehoseEndpoint};
 
 pub struct FirehoseBlockStreamContext<C, F>
 where
@@ -30,12 +29,12 @@ enum BlockStreamState {
         Pin<
             Box<
                 dyn futures03::Future<
-                    Output = Result<tonic::Streaming<bstream::BlockResponseV2>, anyhow::Error>,
+                    Output = Result<tonic::Streaming<firehose::Response>, anyhow::Error>,
                 >,
             >,
         >,
     ),
-    Connected(tonic::Streaming<bstream::BlockResponseV2>),
+    Connected(tonic::Streaming<firehose::Response>),
 }
 
 pub struct FirehoseBlockStream<C: Blockchain, F: FirehoseMapper<C>> {
@@ -96,6 +95,8 @@ impl<C: Blockchain, F: FirehoseMapper<C>> Stream for FirehoseBlockStream<C, F> {
     type Item = Result<BlockStreamEvent<C>, Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        use firehose::ForkStep::*;
+
         loop {
             match &mut self.state {
                 BlockStreamState::Disconnected => {
@@ -120,21 +121,15 @@ impl<C: Blockchain, F: FirehoseMapper<C>> Stream for FirehoseBlockStream<C, F> {
                         },
                     );
 
-                    let future = self
-                        .endpoint
-                        .clone()
-                        .stream_blocks(bstream::BlocksRequestV2 {
-                            start_block_num: start_block_num as i64,
-                            start_cursor: match &self.ctx.active_cursor {
-                                Some(c) => c.clone(),
-                                None => "".to_string(),
-                            },
-                            fork_steps: vec![
-                                bstream::ForkStep::StepNew as i32,
-                                bstream::ForkStep::StepUndo as i32,
-                            ],
-                            ..Default::default()
-                        });
+                    let future = self.endpoint.clone().stream_blocks(firehose::Request {
+                        start_block_num: start_block_num as i64,
+                        start_cursor: match &self.ctx.active_cursor {
+                            Some(c) => c.clone(),
+                            None => "".to_string(),
+                        },
+                        fork_steps: vec![StepNew as i32, StepUndo as i32],
+                        ..Default::default()
+                    });
                     let mut stream_connection = Box::pin(future);
 
                     match stream_connection.poll_unpin(cx) {

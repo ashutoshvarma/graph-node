@@ -10,7 +10,7 @@ use tonic::{
     Request,
 };
 
-use super::bstream;
+use super::codec as firehose;
 
 #[derive(Clone, Debug)]
 pub struct FirehoseEndpoint {
@@ -67,14 +67,14 @@ impl FirehoseEndpoint {
 
     pub async fn stream_blocks(
         self: Arc<Self>,
-        request: bstream::BlocksRequestV2,
-    ) -> Result<tonic::Streaming<bstream::BlockResponseV2>, anyhow::Error> {
+        request: firehose::Request,
+    ) -> Result<tonic::Streaming<firehose::Response>, anyhow::Error> {
         let token_metadata = match self.token.clone() {
             Some(token) => Some(MetadataValue::from_str(token.as_str())?),
             None => None,
         };
 
-        let mut client = bstream::block_stream_v2_client::BlockStreamV2Client::with_interceptor(
+        let mut client = firehose::stream_client::StreamClient::with_interceptor(
             self.channel.cheap_clone(),
             move |mut r: Request<()>| match token_metadata.as_ref() {
                 Some(t) => {
