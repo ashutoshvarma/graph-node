@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use crate::prelude::{QueryExecutionOptions, StoreResolver, SubscriptionExecutionOptions};
 use crate::query::execute_query;
 use crate::subscription::execute_prepared_subscription;
-use graph::prelude::MetricsRegistry;
+use graph::prelude::{MetricsRegistry, QueryResult};
 use graph::prometheus::{Gauge, Histogram};
 use graph::{
     components::store::SubscriptionManager,
@@ -21,6 +21,8 @@ use graph::{
     data::query::{QueryResults, QueryTarget},
     prelude::QueryStore,
 };
+use graphql_tools::validation::validate::{validate, ValidationPlan};
+use graphql_tools::validation::rules::{OverlappingFieldsCanBeMerged};
 
 use lazy_static::lazy_static;
 
@@ -77,6 +79,7 @@ pub struct GraphQlRunner<S, SM> {
     subscription_manager: Arc<SM>,
     load_manager: Arc<LoadManager>,
     result_size: Arc<ResultSizeMetrics>,
+    graphql_validation_plan: ValidationPlan,
 }
 
 lazy_static! {
@@ -135,12 +138,16 @@ where
     ) -> Self {
         let logger = logger.new(o!("component" => "GraphQlRunner"));
         let result_size = Arc::new(ResultSizeMetrics::new(registry));
+        let mut graphql_validation_plan = ValidationPlan { rules: Vec::new() };
+        graphql_validation_plan.add_rule(Box::new(OverlappingFieldsCanBeMerged {}));
+
         GraphQlRunner {
             logger,
             store,
             subscription_manager,
             load_manager,
             result_size,
+            graphql_validation_plan
         }
     }
 
@@ -197,6 +204,11 @@ where
         let state = store.deployment_state().await?;
         let network = Some(store.network_name().to_string());
         let schema = store.api_schema()?;
+        let validation_errors = validate(&schema.document(), &query.document, &self.graphql_validation_plan);
+
+        if validation_errors.len() > 0 {
+            return Ok(QueryResults::from(QueryResult::from(validation_errors)));
+        }
 
         // Test only, see c435c25decbc4ad7bbbadf8e0ced0ff2
         #[cfg(debug_assertions)]

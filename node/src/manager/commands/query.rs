@@ -31,6 +31,10 @@ pub async fn run(
     };
 
     let document = graphql_parser::parse_query(&query)?.into_static();
+
+    // Ideally, `validate` phase should happen here, but we don't have teh schema at this point,
+    // so we cann it in `graphql/runner.rs` instead, where we have the api schema loaded.
+    
     let vars: Vec<(String, r::Value)> = vars
         .into_iter()
         .map(|v| {

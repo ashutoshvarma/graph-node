@@ -9,6 +9,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
+use graphql_tools::validation::utils::{ValidationError};
 
 fn serialize_data<S>(data: &Option<Data>, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -172,7 +173,7 @@ impl QueryResults {
     }
 }
 
-/// The result of running a query, if successful.
+/// The result of running a GraphQL query.
 #[derive(Debug, Serialize)]
 pub struct QueryResult {
     #[serde(
@@ -182,6 +183,7 @@ pub struct QueryResult {
     data: Option<Data>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     errors: Vec<QueryError>,
+    /// This is a non-standard GraphQL response field.
     #[serde(skip_serializing)]
     pub deployment: Option<DeploymentHash>,
 }
@@ -248,6 +250,20 @@ impl From<QueryExecutionError> for QueryResult {
             deployment: None,
         }
     }
+}
+
+impl From<Vec<ValidationError>> for QueryResult {
+  fn from(errors: Vec<ValidationError>) -> Self {
+    let execution_errors = errors.iter().map(|e| {
+      QueryError::ExecutionError(QueryExecutionError::ValidationError(e.locations.clone().into_iter().nth(0), e.message.clone()))
+    }).collect::<Vec<QueryError>>();
+
+      QueryResult {
+          data: None,
+          errors: execution_errors,
+          deployment: None,
+      }
+  }
 }
 
 impl From<QueryError> for QueryResult {

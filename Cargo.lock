@@ -1487,6 +1487,7 @@ dependencies = [
  "futures 0.1.31",
  "futures 0.3.16",
  "graphql-parser",
+ "graphql-tools",
  "hex",
  "http 0.2.5",
  "isatty",
@@ -1623,6 +1624,7 @@ dependencies = [
  "graph",
  "graph-chain-ethereum",
  "graphql-parser",
+ "graphql-tools",
  "indexmap",
  "lazy_static",
  "once_cell",
@@ -1851,6 +1853,15 @@ checksum = "d2ebc8013b4426d5b81a4364c419a95ed0b404af2b82e2457de52d9348f0e474"
 dependencies = [
  "combine",
  "thiserror",
+]
+
+[[package]]
+name = "graphql-tools"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92a078d5c6c3c0f5eea808f4a1b3213b07479be89bbd6f7c0b17cd65aaaf8e75"
+dependencies = [
+ "graphql-parser",
 ]
 
 [[package]]
@@ -4461,18 +4472,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.26"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93119e4feac1cbe6c798c34d3a53ea0026b0b1de6a120deef895137c0529bfe2"
+checksum = "854babe52e4df1653706b98fcfc05843010039b406875930a70e4d9644e5c417"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.26"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "060d69a0afe7796bf42e9e2ff91f5ee691fb15c53d38b4b62a9a53eb23164745"
+checksum = "aa32fd3f627f367fe16f893e2597ae3c05020f8bba2666a4e6ea73d377e5714b"
 dependencies = [
  "proc-macro2 1.0.28",
  "quote 1.0.9",
