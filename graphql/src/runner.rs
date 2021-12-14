@@ -204,9 +204,8 @@ where
         // point, and everything needs to go through the `store` we are
         // setting up here
         let store = self.store.query_store(target, false).await?;
-        let state = store.deployment_state().await?;
-        let network = Some(store.network_name().to_string());
         let schema = store.api_schema()?;
+
         let validation_errors = validate(
             &schema.document(),
             &query.document,
@@ -216,6 +215,9 @@ where
         if validation_errors.len() > 0 {
             return Ok(QueryResults::from(QueryResult::from(validation_errors)));
         }
+
+        let state = store.deployment_state().await?;
+        let network = Some(store.network_name().to_string());
 
         // Test only, see c435c25decbc4ad7bbbadf8e0ced0ff2
         #[cfg(debug_assertions)]
