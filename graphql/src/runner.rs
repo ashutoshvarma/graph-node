@@ -22,7 +22,8 @@ use graph::{
     prelude::QueryStore,
 };
 use graphql_tools::validation::rules::{
-    FragmentsOnCompositeTypes, LoneAnonymousOperation, OverlappingFieldsCanBeMerged,
+    FragmentsOnCompositeTypes, KnownFragmentNamesRule, LoneAnonymousOperation, NoUnusedFragments,
+    OverlappingFieldsCanBeMerged,
 };
 use graphql_tools::validation::validate::{validate, ValidationPlan};
 
@@ -145,6 +146,8 @@ where
         graphql_validation_plan.add_rule(Box::new(LoneAnonymousOperation {}));
         graphql_validation_plan.add_rule(Box::new(FragmentsOnCompositeTypes {}));
         graphql_validation_plan.add_rule(Box::new(OverlappingFieldsCanBeMerged {}));
+        graphql_validation_plan.add_rule(Box::new(KnownFragmentNamesRule {}));
+        graphql_validation_plan.add_rule(Box::new(NoUnusedFragments {}));
 
         GraphQlRunner {
             logger,
