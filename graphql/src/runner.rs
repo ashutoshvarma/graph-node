@@ -21,8 +21,8 @@ use graph::{
     data::query::{QueryResults, QueryTarget},
     prelude::QueryStore,
 };
+use graphql_tools::validation::rules::default_rules_validation_plan;
 use graphql_tools::validation::validate::{validate, ValidationPlan};
-use graphql_tools::validation::rules::{OverlappingFieldsCanBeMerged};
 
 use lazy_static::lazy_static;
 
@@ -138,8 +138,11 @@ where
     ) -> Self {
         let logger = logger.new(o!("component" => "GraphQlRunner"));
         let result_size = Arc::new(ResultSizeMetrics::new(registry));
-        let mut graphql_validation_plan = ValidationPlan { rules: Vec::new() };
-        graphql_validation_plan.add_rule(Box::new(OverlappingFieldsCanBeMerged {}));
+        // This is created only once, and includes the following rules at the moment:
+        // LoneAnonymousOperation
+        // FragmentsOnCompositeTypes
+        // OverlappingFieldsCanBeMerged
+        let graphql_validation_plan = default_rules_validation_plan();
 
         GraphQlRunner {
             logger,
@@ -147,7 +150,7 @@ where
             subscription_manager,
             load_manager,
             result_size,
-            graphql_validation_plan
+            graphql_validation_plan,
         }
     }
 
@@ -204,7 +207,11 @@ where
         let state = store.deployment_state().await?;
         let network = Some(store.network_name().to_string());
         let schema = store.api_schema()?;
-        let validation_errors = validate(&schema.document(), &query.document, &self.graphql_validation_plan);
+        let validation_errors = validate(
+            &schema.document(),
+            &query.document,
+            &self.graphql_validation_plan,
+        );
 
         if validation_errors.len() > 0 {
             return Ok(QueryResults::from(QueryResult::from(validation_errors)));

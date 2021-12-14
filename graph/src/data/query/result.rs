@@ -1,5 +1,6 @@
 use super::error::{QueryError, QueryExecutionError};
 use crate::prelude::{r, CacheWeight, DeploymentHash};
+use graphql_tools::validation::utils::ValidationError;
 use http::header::{
     ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
     CONTENT_TYPE,
@@ -9,7 +10,6 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use graphql_tools::validation::utils::{ValidationError};
 
 fn serialize_data<S>(data: &Option<Data>, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -253,17 +253,23 @@ impl From<QueryExecutionError> for QueryResult {
 }
 
 impl From<Vec<ValidationError>> for QueryResult {
-  fn from(errors: Vec<ValidationError>) -> Self {
-    let execution_errors = errors.iter().map(|e| {
-      QueryError::ExecutionError(QueryExecutionError::ValidationError(e.locations.clone().into_iter().nth(0), e.message.clone()))
-    }).collect::<Vec<QueryError>>();
+    fn from(errors: Vec<ValidationError>) -> Self {
+        let execution_errors = errors
+            .iter()
+            .map(|e| {
+                QueryError::ExecutionError(QueryExecutionError::ValidationError(
+                    e.locations.clone().into_iter().nth(0),
+                    e.message.clone(),
+                ))
+            })
+            .collect::<Vec<QueryError>>();
 
-      QueryResult {
-          data: None,
-          errors: execution_errors,
-          deployment: None,
-      }
-  }
+        QueryResult {
+            data: None,
+            errors: execution_errors,
+            deployment: None,
+        }
+    }
 }
 
 impl From<QueryError> for QueryResult {
