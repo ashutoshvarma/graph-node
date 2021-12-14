@@ -21,7 +21,7 @@ use graph::{
     data::query::{QueryResults, QueryTarget},
     prelude::QueryStore,
 };
-use graphql_tools::validation::rules::{default_rules_validation_plan, LoneAnonymousOperation, FragmentsOnCompositeTypes, OverlappingFieldsCanBeMerged};
+use graphql_tools::validation::rules::{LoneAnonymousOperation, FragmentsOnCompositeTypes, OverlappingFieldsCanBeMerged};
 use graphql_tools::validation::validate::{validate, ValidationPlan};
 
 use lazy_static::lazy_static;
