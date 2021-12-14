@@ -21,7 +21,9 @@ use graph::{
     data::query::{QueryResults, QueryTarget},
     prelude::QueryStore,
 };
-use graphql_tools::validation::rules::{LoneAnonymousOperation, FragmentsOnCompositeTypes, OverlappingFieldsCanBeMerged};
+use graphql_tools::validation::rules::{
+    FragmentsOnCompositeTypes, LoneAnonymousOperation, OverlappingFieldsCanBeMerged,
+};
 use graphql_tools::validation::validate::{validate, ValidationPlan};
 
 use lazy_static::lazy_static;
@@ -138,9 +140,7 @@ where
     ) -> Self {
         let logger = logger.new(o!("component" => "GraphQlRunner"));
         let result_size = Arc::new(ResultSizeMetrics::new(registry));
-        let mut graphql_validation_plan = ValidationPlan {
-          rules: Vec::new()
-        };
+        let mut graphql_validation_plan = ValidationPlan { rules: Vec::new() };
 
         graphql_validation_plan.add_rule(Box::new(LoneAnonymousOperation {}));
         graphql_validation_plan.add_rule(Box::new(FragmentsOnCompositeTypes {}));
