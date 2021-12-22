@@ -6,10 +6,33 @@ use thiserror::Error;
 use super::{Block, BlockPtr, Blockchain};
 use crate::components::store::BlockNumber;
 use crate::firehose::bstream;
+use crate::prelude::tokio::sync::mpsc::Sender;
 use crate::{prelude::*, prometheus::labels};
 
-pub trait BlockStream<C: Blockchain>:
-    Stream<Item = Result<BlockStreamEvent<C>, Error>> + Unpin
+pub async fn stream_to_channel<C: Send>(
+    stream: Box<dyn BlockStream<C>>,
+    guard: Arc<SharedCancelGuard>,
+    sender: Sender<Result<BlockStreamEvent<C>, CancelableError<Error>>>,
+) -> Result<(), Error> {
+    let mut stream = stream
+        .map_err(CancelableError::Error)
+        .cancelable(guard.as_ref(), || Err(CancelableError::Cancel));
+
+    loop {
+        let event = match stream.next().await {
+            Some(event) => event,
+            None => return Ok(()),
+        };
+
+        match sender.send(event).await {
+            Ok(_) => {}
+            Err(_) => return Err(anyhow!("receiver dropped")),
+        }
+    }
+}
+
+pub trait BlockStream<C: Send>:
+    Stream<Item = Result<BlockStreamEvent<C>, Error>> + Unpin + Send
 {
 }
 
@@ -85,7 +108,7 @@ pub trait FirehoseMapper<C: Blockchain>: Send + Sync {
         response: &bstream::BlockResponseV2,
         adapter: &C::TriggersAdapter,
         filter: &C::TriggerFilter,
-    ) -> Result<BlockStreamEvent<C>, FirehoseError>;
+    ) -> Result<BlockStreamEvent<BlockWithTriggers<C>>, FirehoseError>;
 }
 
 #[derive(Error, Debug)]
@@ -99,13 +122,13 @@ pub enum FirehoseError {
     UnknownError(#[from] anyhow::Error),
 }
 
-pub enum BlockStreamEvent<C: Blockchain> {
+pub enum BlockStreamEvent<C: Send> {
     // The payload is the current subgraph head pointer, which should be reverted, such that the
     // parent of the current subgraph head becomes the new subgraph head.
     // An optional pointer to the parent block will save a round trip operation when reverting.
     Revert(BlockPtr, FirehoseCursor, Option<BlockPtr>),
 
-    ProcessBlock(BlockWithTriggers<C>, FirehoseCursor),
+    ProcessBlock(C, FirehoseCursor),
 }
 
 #[derive(Clone)]
@@ -168,4 +191,86 @@ pub type ChainHeadUpdateStream = Box<dyn Stream<Item = ()> + Send + Unpin>;
 pub trait ChainHeadUpdateListener: Send + Sync + 'static {
     /// Subscribe to chain head updates for the given network.
     fn subscribe(&self, network: String, logger: Logger) -> ChainHeadUpdateStream;
+}
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashSet, sync::Arc, task::Poll};
+
+    use anyhow::Error;
+    use futures03::Stream;
+    use tokio::sync::mpsc;
+
+    use crate::ext::futures::{CancelableError, SharedCancelGuard};
+
+    use super::{stream_to_channel, BlockStream, BlockStreamEvent};
+
+    #[derive(Clone, Eq, PartialEq, Hash)]
+    struct Block {
+        number: u64,
+    }
+
+    struct TestStream {
+        number: u64,
+    }
+
+    impl BlockStream<Block> for TestStream {}
+
+    impl Stream for TestStream {
+        type Item = Result<BlockStreamEvent<Block>, Error>;
+
+        fn poll_next(
+            mut self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Self::Item>> {
+            self.number += 1;
+            Poll::Ready(Some(Ok(BlockStreamEvent::ProcessBlock(
+                Block {
+                    number: self.number - 1,
+                },
+                None,
+            ))))
+        }
+    }
+
+    #[tokio::test]
+    async fn consume_stream() {
+        let initial_block = 100;
+        let buffer_size = 5;
+        let (sender, mut receiver) = mpsc::channel(5);
+
+        let stream = Box::new(TestStream {
+            number: initial_block,
+        });
+        let guard = Arc::new(SharedCancelGuard::new());
+        let stream_guard = guard.clone();
+        crate::spawn(stream_to_channel(stream, stream_guard, sender));
+        let mut blocks = HashSet::<Block>::new();
+        let mut count = 0;
+        loop {
+            match receiver.recv().await {
+                None if blocks.len() == 0 => panic!("None before blocks"),
+                Some(Err(CancelableError::Cancel)) => {
+                    assert!(guard.is_canceled(), "Guard shouldn't be called yet");
+
+                    break;
+                }
+                Some(Ok(BlockStreamEvent::ProcessBlock(block, _))) => {
+                    blocks.insert(block.clone());
+                    count += 1;
+
+                    if block.number > initial_block + buffer_size {
+                        guard.cancel();
+                    }
+                }
+                _ => panic!("Should not happen"),
+            };
+        }
+        assert!(
+            blocks.len() as u64 > buffer_size,
+            "should consume at least a full buffer, consumed {}",
+            count
+        );
+        assert_eq!(count, blocks.len(), "should not have duplicated blocks");
+    }
 }

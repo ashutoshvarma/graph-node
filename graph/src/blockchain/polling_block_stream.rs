@@ -507,10 +507,10 @@ where
     }
 }
 
-impl<C: Blockchain> BlockStream<C> for PollingBlockStream<C> {}
+impl<C: Blockchain> BlockStream<BlockWithTriggers<C>> for PollingBlockStream<C> {}
 
 impl<C: Blockchain> Stream for PollingBlockStream<C> {
-    type Item = Result<BlockStreamEvent<C>, Error>;
+    type Item = Result<BlockStreamEvent<BlockWithTriggers<C>>, Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let result = loop {

@@ -46,7 +46,7 @@ use web3::types::H256;
 pub use block_stream::{ChainHeadUpdateListener, ChainHeadUpdateStream, TriggersAdapter};
 pub use types::{BlockHash, BlockPtr, ChainIdentifier};
 
-use self::block_stream::{BlockStream, BlockStreamMetrics};
+use self::block_stream::{BlockStream, BlockStreamMetrics, BlockWithTriggers};
 
 pub trait Block: Send + Sync {
     fn ptr(&self) -> BlockPtr;
@@ -87,7 +87,7 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
     type TriggersAdapter: TriggersAdapter<Self>;
 
     /// Trigger data as parsed from the triggers adapter.
-    type TriggerData: TriggerData + Ord;
+    type TriggerData: TriggerData + Ord + Send + Sync + Clone;
 
     /// Decoded trigger ready to be processed by the mapping.
     /// New implementations should have this be the same as `TriggerData`.
@@ -118,7 +118,7 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
         filter: Arc<Self::TriggerFilter>,
         metrics: Arc<BlockStreamMetrics>,
         unified_api_version: UnifiedMappingApiVersion,
-    ) -> Result<Box<dyn BlockStream<Self>>, Error>;
+    ) -> Result<Box<dyn BlockStream<BlockWithTriggers<Self>>>, Error>;
 
     async fn new_polling_block_stream(
         &self,
@@ -128,7 +128,7 @@ pub trait Blockchain: Debug + Sized + Send + Sync + Unpin + 'static {
         filter: Arc<Self::TriggerFilter>,
         metrics: Arc<BlockStreamMetrics>,
         unified_api_version: UnifiedMappingApiVersion,
-    ) -> Result<Box<dyn BlockStream<Self>>, Error>;
+    ) -> Result<Box<dyn BlockStream<BlockWithTriggers<Self>>>, Error>;
 
     fn ingestor_adapter(&self) -> Arc<Self::IngestorAdapter>;
 
