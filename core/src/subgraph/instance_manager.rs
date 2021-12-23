@@ -30,6 +30,7 @@ use std::time::{Duration, Instant};
 use tokio::task;
 
 const MINUTE: Duration = Duration::from_secs(60);
+const SYNC_STATUS_THRESHOLD: Duration = Duration::from_secs(60 * 3);
 
 lazy_static! {
     /// Size limit of the entity LFU cache, in bytes.
@@ -470,6 +471,8 @@ where
     let id_for_err = ctx.inputs.deployment.hash.clone();
     let mut should_try_unfail_deterministic = true;
     let mut should_try_unfail_non_deterministic = true;
+    let mut should_update_sync_status = true;
+    let sync_timer = Instant::now();
 
     // Exponential backoff that starts with two minutes and keeps
     // increasing its timeout exponentially until it reaches the ceiling.
@@ -481,6 +484,7 @@ where
         let block_stream_canceler = CancelGuard::new();
         let block_stream_cancel_handle = block_stream_canceler.handle();
         let chain = ctx.inputs.chain.clone();
+        let chain_store = chain.chain_store();
 
         let mut block_stream = match chain.is_firehose_supported() {
             true => {
@@ -665,6 +669,10 @@ where
 
             match res {
                 Ok(needs_restart) => {
+                    if should_update_sync_status {
+                        update_sync_status()?;
+                    }
+
                     // Keep trying to unfail subgraph for everytime it advances block(s) until it's
                     // health is not Failed anymore.
                     if should_try_unfail_non_deterministic {
@@ -1267,4 +1275,17 @@ fn persist_dynamic_data_sources<T: RuntimeHostBuilder<C>, C: Blockchain>(
 
     // Merge filters from data sources into the block stream builder
     ctx.state.filter.extend(data_sources.iter());
+}
+
+/// Returns true if it tried to update the deployment
+fn update_sync_status(sync_timer: &Instant, chain_store: &Arc<dyn ChainStore>, ) -> Result<bool, Error> {
+    let threshold_has_passed = SYNC_STATUS_THRESHOLD.as_secs().checked_div(sync_timer.elapsed().as_secs()) == Some(0);
+
+    let chain_head_ptr = chain_store.chain_head_ptr()?;
+
+    if threshold_has_passed && matches!((&chain_head_ptr, &block_ptr), (Some(b1), b2) if b1 == b2) {
+        should_update_sync_status = false;
+
+        ctx.inputs.store.deployment_synced()?;
+    }
 }

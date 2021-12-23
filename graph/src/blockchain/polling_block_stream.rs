@@ -493,7 +493,10 @@ where
         let head_ptr_opt = self.chain_store.chain_head_ptr()?;
         let subgraph_ptr = self.current_block.clone();
 
-        if head_ptr_opt != subgraph_ptr || head_ptr_opt.is_none() || subgraph_ptr.is_none() {
+        // Some(144) != Some(144)
+        // None != None
+        if matches!((head_ptr_opt, subgraph_ptr), (Some(b1), Some(b2)) if b1 != b2) {
+        // if head_ptr_opt != subgraph_ptr || head_ptr_opt.is_none() || subgraph_ptr.is_none() {
             // Not synced yet
             Ok(())
         } else {
